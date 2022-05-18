@@ -107,6 +107,38 @@ async function run() {
             }
         });
 
+        app.get('/user', verifyJWT, async (req, res)=> {
+            const result = await userCollection.find().toArray();
+            res.send(result)
+        })
+
+        app.put("/user/admin/:email",verifyJWT, async (req, res) => {
+            const email = req.params.email;
+            const requester = req.decoded.email;
+            const requestedAccount = await userCollection.findOne({email: requester});
+            if(requestedAccount.role === 'admin'){
+                const filter = { email: email };
+            const updateDoc = {
+                $set: {role: "admin"},
+            };
+            const result = await userCollection.updateOne(
+                filter,
+                updateDoc
+            );
+            res.send (result);
+            }
+            else{
+                res.status(403).send({message: "ForBidden Accesss"})
+            }
+            
+        });
+
+        app.get('/user/checkAdmin/:email', async (req, res)=> {
+            const email = req.params.email;
+            const result = await userCollection.findOne({email: email});
+            res.send(result)
+        })
+
         //post per booking
         app.post("/booking", async (req, res) => {
             const booking = req.body;

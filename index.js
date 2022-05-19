@@ -116,8 +116,9 @@ async function run() {
             const email = req.params.email;
             const requester = req.decoded.email;
             const requestedAccount = await userCollection.findOne({email: requester});
+            const filter = { email: email };
             if(requestedAccount.role === 'admin'){
-                const filter = { email: email };
+                
             const updateDoc = {
                 $set: {role: "admin"},
             };
@@ -135,8 +136,9 @@ async function run() {
 
         app.get('/user/checkAdmin/:email', async (req, res)=> {
             const email = req.params.email;
-            const result = await userCollection.findOne({email: email});
-            res.send(result)
+            const user = await userCollection.findOne({email: email});
+            const isAdmin = user.role === 'admin'
+            res.send({admin: isAdmin})
         })
 
         //post per booking

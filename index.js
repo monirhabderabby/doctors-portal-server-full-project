@@ -52,6 +52,9 @@ async function run() {
             if(requestedAccount.role === 'admin'){
                 return next();
             }
+            else{
+                res.status(403).send({message: "Forbidden Access"})
+            }
         }
 
         app.get("/services", async (req, res) => {
@@ -122,6 +125,12 @@ async function run() {
         app.get('/user', verifyJWT, async (req, res)=> {
             const result = await userCollection.find().toArray();
             res.send(result)
+        })
+
+        //get all doctor information
+        app.get('/doctor',verifyJWT, verifyAdmin, async (req, res)=> {
+            const result = await doctorCollection.find().toArray()
+            res.send(result);
         })
 
         app.put("/user/admin/:email",verifyJWT, verifyAdmin, async (req, res) => {

@@ -45,6 +45,15 @@ async function run() {
         const userCollection = client.db("doctors_portal").collection("users");
         const doctorCollection = client.db("doctors_portal").collection("doctors");
 
+        //Custom MiddlwWare
+        const verifyAdmin = async (req, res, next)=>{
+            const requester = req.decoded.email;
+            const requestedAccount = await userCollection.findOne({email: requester});
+            if(requestedAccount.role === 'admin'){
+                return next();
+            }
+        }
+
         app.get("/services", async (req, res) => {
             const query = {};
             const cursor = servicesCollection.find(query).project({name: 1});
@@ -115,13 +124,9 @@ async function run() {
             res.send(result)
         })
 
-        app.put("/user/admin/:email",verifyJWT, async (req, res) => {
+        app.put("/user/admin/:email",verifyJWT, verifyAdmin, async (req, res) => {
             const email = req.params.email;
-            const requester = req.decoded.email;
-            const requestedAccount = await userCollection.findOne({email: requester});
-            const filter = { email: email };
-            if(requestedAccount.role === 'admin'){
-                
+            const filter = { email: email };  
             const updateDoc = {
                 $set: {role: "admin"},
             };
@@ -130,12 +135,10 @@ async function run() {
                 updateDoc
             );
             res.send (result);
-            }
-            else{
-                res.status(403).send({message: "ForBidden Accesss"})
-            }
             
-        });
+        }
+            
+        );
 
         app.get('/user/checkAdmin/:email', async (req, res)=> {
             const email = req.params.email;

@@ -43,9 +43,12 @@ async function run() {
             .db("doctors_portal")
             .collection("bookings");
         const userCollection = client.db("doctors_portal").collection("users");
+        const doctorCollection = client.db("doctors_portal").collection("doctors");
 
         app.get("/services", async (req, res) => {
-            const result = await servicesCollection.find({}).toArray();
+            const query = {};
+            const cursor = servicesCollection.find(query).project({name: 1});
+            const result = await cursor.toArray();
             res.send(result);
         });
 
@@ -156,6 +159,20 @@ async function run() {
             const result = await bookingCollection.insertOne(booking);
             res.send({ success: true });
         });
+
+        app.put('/doctor',verifyJWT, async (req, res)=> {
+            const doctor = req.body;
+            const query = {email: doctor.email}
+            const exists = await doctorCollection.findOne(query);
+            if(exists){
+                res.send({acknowledged: false})
+                
+            }
+            else{
+                const result = await doctorCollection.insertOne(doctor);
+                res.send(result)
+            }
+        })
     } finally {
     }
 }

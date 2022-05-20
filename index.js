@@ -4,6 +4,8 @@ const app = express();
 require("dotenv").config();
 var jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion } = require("mongodb");
+var nodemailer = require('nodemailer');
+var sgTransport = require('nodemailer-sendgrid-transport');
 const port = process.env.PORT || 5000;
 
 //middleware
@@ -17,6 +19,51 @@ const client = new MongoClient(uri, {
     serverApi: ServerApiVersion.v1,
 });
 
+//Email sending from DB
+var EmailSenderOptions = {
+    auth: {
+      api_key: process.env.EMAIL_SENDER_KEY
+    }
+  }
+
+  var EmailSenderclient = nodemailer.createTransport(sgTransport(EmailSenderOptions));
+
+  function sendAppoinmentEmail (booking){
+      const {patient, treatment, date, patientName, slot} = booking;
+      var email = {
+        from: 'monirhrabby.programmer@gmail.com',
+        to: patient,
+        subject: `Your Appoinment is for ${treatment} on ${date} at ${slot} is Confirmed`,
+        text: `Your Appoinment is for ${treatment} on ${date} at ${slot} is Confirmed`,
+        html: `
+        <div>
+        <p> Hello ${patientName}, </p>
+        <h3>Your Appointment for ${treatment} is confirmed</h3>
+        <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+        
+        <h3>Our Address</h3>
+        <p>Andor Killa Bandorban</p>
+        <p>Bangladesh</p>
+        <a href="https://web.programming-hero.com/">unsubscribe</a>
+      </div>
+        
+        
+        `
+      };
+
+      EmailSenderclient.sendMail(email, function(err, info){
+        if (err ){
+          console.log(err);
+        }
+        else {
+          console.log('Message sent: ', info);
+        }
+    });
+  }
+
+
+
+//Verification JSON WEB Token
 function verifyJWT(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -152,7 +199,7 @@ async function run() {
         app.get('/user/checkAdmin/:email', async (req, res)=> {
             const email = req.params.email;
             const user = await userCollection.findOne({email: email});
-            const isAdmin = user.role === 'admin'
+            const isAdmin = user?.role === 'admin'
             res.send({admin: isAdmin})
         })
 
@@ -169,6 +216,7 @@ async function run() {
                 return res.send({ success: false, booking: exists });
             }
             const result = await bookingCollection.insertOne(booking);
+            sendAppoinmentEmail(booking);
             res.send({ success: true });
         });
 

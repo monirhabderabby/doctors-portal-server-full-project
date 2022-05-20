@@ -3,7 +3,7 @@ const cors = require("cors");
 const app = express();
 require("dotenv").config();
 var jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 var nodemailer = require('nodemailer');
 var sgTransport = require('nodemailer-sendgrid-transport');
 const port = process.env.PORT || 5000;
@@ -178,6 +178,14 @@ async function run() {
         app.get('/doctor',verifyJWT, verifyAdmin, async (req, res)=> {
             const result = await doctorCollection.find().toArray()
             res.send(result);
+        })
+
+        //get booking using perticuler bookingID
+        app.get('/booking/:id',verifyJWT, async (req, res)=> {
+            const id = req.params.id;
+            const query = {_id: ObjectId(id)}
+            const result = await bookingCollection.findOne(query);
+            res.send(result)
         })
 
         app.put("/user/admin/:email",verifyJWT, verifyAdmin, async (req, res) => {

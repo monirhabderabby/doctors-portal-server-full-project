@@ -2,10 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 var jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-var nodemailer = require('nodemailer');
-var sgTransport = require('nodemailer-sendgrid-transport');
+var nodemailer = require("nodemailer");
+var sgTransport = require("nodemailer-sendgrid-transport");
 const port = process.env.PORT || 5000;
 
 //middleware
@@ -22,16 +23,18 @@ const client = new MongoClient(uri, {
 //Email sending from DB
 var EmailSenderOptions = {
     auth: {
-      api_key: process.env.EMAIL_SENDER_KEY
-    }
-  }
+        api_key: process.env.EMAIL_SENDER_KEY,
+    },
+};
 
-  var EmailSenderclient = nodemailer.createTransport(sgTransport(EmailSenderOptions));
+var EmailSenderclient = nodemailer.createTransport(
+    sgTransport(EmailSenderOptions)
+);
 
-  function sendAppoinmentEmail (booking){
-      const {patient, treatment, date, patientName, slot} = booking;
-      var email = {
-        from: 'monirhrabby.programmer@gmail.com',
+function sendAppoinmentEmail(booking) {
+    const { patient, treatment, date, patientName, slot } = booking;
+    var email = {
+        from: "monirhrabby.programmer@gmail.com",
         to: patient,
         subject: `Your Appoinment is for ${treatment} on ${date} at ${slot} is Confirmed`,
         text: `Your Appoinment is for ${treatment} on ${date} at ${slot} is Confirmed`,
@@ -48,20 +51,17 @@ var EmailSenderOptions = {
       </div>
         
         
-        `
-      };
+        `,
+    };
 
-      EmailSenderclient.sendMail(email, function(err, info){
-        if (err ){
-          console.log(err);
-        }
-        else {
-          console.log('Message sent: ', info);
+    EmailSenderclient.sendMail(email, function (err, info) {
+        if (err) {
+            console.log(err);
+        } else {
+            console.log("Message sent: ", info);
         }
     });
-  }
-
-
+}
 
 //Verification JSON WEB Token
 function verifyJWT(req, res, next) {
@@ -90,23 +90,39 @@ async function run() {
             .db("doctors_portal")
             .collection("bookings");
         const userCollection = client.db("doctors_portal").collection("users");
-        const doctorCollection = client.db("doctors_portal").collection("doctors");
+        const doctorCollection = client
+            .db("doctors_portal")
+            .collection("doctors");
 
         //Custom MiddlwWare
-        const verifyAdmin = async (req, res, next)=>{
+        const verifyAdmin = async (req, res, next) => {
             const requester = req.decoded.email;
-            const requestedAccount = await userCollection.findOne({email: requester});
-            if(requestedAccount.role === 'admin'){
+            const requestedAccount = await userCollection.findOne({
+                email: requester,
+            });
+            if (requestedAccount.role === "admin") {
                 return next();
+            } else {
+                res.status(403).send({ message: "Forbidden Access" });
             }
-            else{
-                res.status(403).send({message: "Forbidden Access"})
-            }
-        }
+        };
+
+        //Stripe payment
+        app.post("/create-payment-intent", async(req, res) => {
+            const service = req.body;
+            const Price = service.Price;
+            const amount = Price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount : amount,
+                currency: 'usd',
+                payment_method_types:['card']
+              });
+              res.send({clientSecret: paymentIntent.client_secret})
+        });
 
         app.get("/services", async (req, res) => {
             const query = {};
-            const cursor = servicesCollection.find(query).project({name: 1});
+            const cursor = servicesCollection.find(query).project({ name: 1 });
             const result = await cursor.toArray();
             res.send(result);
         });
@@ -169,47 +185,49 @@ async function run() {
             }
         });
 
-        app.get('/user', verifyJWT, async (req, res)=> {
+        app.get("/user", verifyJWT, async (req, res) => {
             const result = await userCollection.find().toArray();
-            res.send(result)
-        })
+            res.send(result);
+        });
 
         //get all doctor information
-        app.get('/doctor',verifyJWT, verifyAdmin, async (req, res)=> {
-            const result = await doctorCollection.find().toArray()
+        app.get("/doctor", verifyJWT, verifyAdmin, async (req, res) => {
+            const result = await doctorCollection.find().toArray();
             res.send(result);
-        })
+        });
 
         //get booking using perticuler bookingID
-        app.get('/booking/:id',verifyJWT, async (req, res)=> {
+        app.get("/booking/:id", verifyJWT, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: ObjectId(id)}
+            const query = { _id: ObjectId(id) };
             const result = await bookingCollection.findOne(query);
-            res.send(result)
-        })
+            res.send(result);
+        });
 
-        app.put("/user/admin/:email",verifyJWT, verifyAdmin, async (req, res) => {
-            const email = req.params.email;
-            const filter = { email: email };  
-            const updateDoc = {
-                $set: {role: "admin"},
-            };
-            const result = await userCollection.updateOne(
-                filter,
-                updateDoc
-            );
-            res.send (result);
-            
-        }
-            
+        app.put(
+            "/user/admin/:email",
+            verifyJWT,
+            verifyAdmin,
+            async (req, res) => {
+                const email = req.params.email;
+                const filter = { email: email };
+                const updateDoc = {
+                    $set: { role: "admin" },
+                };
+                const result = await userCollection.updateOne(
+                    filter,
+                    updateDoc
+                );
+                res.send(result);
+            }
         );
 
-        app.get('/user/checkAdmin/:email', async (req, res)=> {
+        app.get("/user/checkAdmin/:email", async (req, res) => {
             const email = req.params.email;
-            const user = await userCollection.findOne({email: email});
-            const isAdmin = user?.role === 'admin'
-            res.send({admin: isAdmin})
-        })
+            const user = await userCollection.findOne({ email: email });
+            const isAdmin = user?.role === "admin";
+            res.send({ admin: isAdmin });
+        });
 
         //post per booking
         app.post("/booking", async (req, res) => {
@@ -228,26 +246,24 @@ async function run() {
             res.send({ success: true });
         });
 
-        app.put('/doctor',verifyJWT, async (req, res)=> {
+        app.put("/doctor", verifyJWT, async (req, res) => {
             const doctor = req.body;
-            const query = {email: doctor.email}
+            const query = { email: doctor.email };
             const exists = await doctorCollection.findOne(query);
-            if(exists){
-                res.send({acknowledged: false})
-                
-            }
-            else{
+            if (exists) {
+                res.send({ acknowledged: false });
+            } else {
                 const result = await doctorCollection.insertOne(doctor);
-                res.send(result)
+                res.send(result);
             }
-        })
+        });
 
-        app.delete('/doctor/:email',verifyJWT, async (req, res)=> {
+        app.delete("/doctor/:email", verifyJWT, async (req, res) => {
             const email = req.params.email;
-            const filter = {email: email};
+            const filter = { email: email };
             const result = await doctorCollection.deleteOne(filter);
-            res.send(result)
-        })
+            res.send(result);
+        });
     } finally {
     }
 }
